@@ -17,13 +17,18 @@ from ask_sdk_model import Response
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-import pandas as pd
+# import pandas as pd
+import csv
 import requests
 import io
 import calendar
+from io import StringIO
+from datetime import datetime
+
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
+
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         print("request was received")
@@ -35,11 +40,34 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
         return (
             handler_input.response_builder
-                .speak(speak_output)
-                .ask(speak_output)
-                .response
+            .speak(speak_output)
+            .ask(speak_output)
+            .response
         )
 
+
+def read_csv_from_string(csv_string):
+    reader = csv.DictReader(StringIO(csv_string))
+    return [row for row in reader]
+
+
+def find_zodiac(zodiac_data, month, day):
+    month = month.lower().capitalize()
+    date_str = f"{month} {day}"
+    # Convert input date string to datetime object
+    input_date = datetime.strptime(date_str, '%B %d')
+
+    for zodiac in zodiac_data:
+        zodiac['Start'] = datetime.strptime(zodiac['Start'], '%B %d')
+        zodiac['End'] = datetime.strptime(zodiac['End'], '%B %d')
+
+    for zodiac in zodiac_data:
+        start_date = zodiac['Start'].replace(year=input_date.year)  # Set the year of start date to match input year
+        end_date = zodiac['End'].replace(year=input_date.year)  # Set the year of end date to match input year
+        if start_date <= input_date <= end_date:
+            return zodiac['Zodiac']
+
+    return "No matching zodiac found"
 
 
 class CaptureZodiacSignIntentHandler(AbstractRequestHandler):
@@ -62,20 +90,29 @@ class CaptureZodiacSignIntentHandler(AbstractRequestHandler):
         day = slots["day"].value  # ENTER YOUR URL HERE
         url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTJ9nFnQQDNrp6KfitFixbAIzvIF98EyY9jmilF74AZmRanJK3HQtHY33ObX8I77w/pub?gid=1653297855&single=true&output=csv"
         csv_content = requests.get(url).content
-        df = pd.read_csv(io.StringlO(csv_content.decode('utf-8')))
-        zodiac = ''
-        month_as_index = list(calendar.month_abbr).index(month[:3].title)
-        ust_dob = (month_as_index, int(day))
-        for index, row in df.iterrows:
-            if self.filter(row['Start']) <= ust_dob <= self.filter(row['End']):
-                zodiac = row['Zodiac']
-        speak_output = 'I see you were born on the {day) of (month; (year), which means that your zodiac sign will be (zodiac) format(month= month, day=day, year-year, zodiac=zodiac)'
+        print(csv_content)
+        # Example data
+        print("before csv data")
+        data = read_csv_from_string(csv_content.decode('utf-8'))
+        print("got data")
+
+        zodiac = find_zodiac(data, month, day)
+        # df = pd.read_csv(io.StringlO(csv_content.decode('utf-8')))
+        # zodiac = ''
+        # month_as_index = list(calendar.month_abbr).index(month[:3].title)
+        # ust_dob = (month_as_index, int(day))
+        # for index, row in df.iterrows:
+        #     if self.filter(row['Start']) <= ust_dob <= self.filter(row['End']):
+        #         zodiac = row['Zodiac']
+        speak_output = 'I see you were born on the {day} of {month} {year},which means that your zodiac sign will be {zodiac}'.format(
+            month=month, day=day, year=year, zodiac=zodiac)
 
         return (handler_input.response_builder.speak(speak_output).response)
 
 
 class HelpIntentHandler(AbstractRequestHandler):
     """Handler for Help Intent."""
+
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return ask_utils.is_intent_name("AMAZON.HelpIntent")(handler_input)
@@ -86,14 +123,15 @@ class HelpIntentHandler(AbstractRequestHandler):
 
         return (
             handler_input.response_builder
-                .speak(speak_output)
-                .ask(speak_output)
-                .response
+            .speak(speak_output)
+            .ask(speak_output)
+            .response
         )
 
 
 class CancelOrStopIntentHandler(AbstractRequestHandler):
     """Single handler for Cancel and Stop Intent."""
+
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return (ask_utils.is_intent_name("AMAZON.CancelIntent")(handler_input) or
@@ -105,12 +143,14 @@ class CancelOrStopIntentHandler(AbstractRequestHandler):
 
         return (
             handler_input.response_builder
-                .speak(speak_output)
-                .response
+            .speak(speak_output)
+            .response
         )
+
 
 class FallbackIntentHandler(AbstractRequestHandler):
     """Single handler for Fallback Intent."""
+
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return ask_utils.is_intent_name("AMAZON.FallbackIntent")(handler_input)
@@ -123,8 +163,10 @@ class FallbackIntentHandler(AbstractRequestHandler):
 
         return handler_input.response_builder.speak(speech).ask(reprompt).response
 
+
 class SessionEndedRequestHandler(AbstractRequestHandler):
     """Handler for Session End."""
+
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return ask_utils.is_request_type("SessionEndedRequest")(handler_input)
@@ -143,6 +185,7 @@ class IntentReflectorHandler(AbstractRequestHandler):
     for your intents by defining them above, then also adding them to the request
     handler chain below.
     """
+
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
         return ask_utils.is_request_type("IntentRequest")(handler_input)
@@ -154,9 +197,9 @@ class IntentReflectorHandler(AbstractRequestHandler):
 
         return (
             handler_input.response_builder
-                .speak(speak_output)
-                # .ask("add a reprompt if you want to keep the session open for the user to respond")
-                .response
+            .speak(speak_output)
+            # .ask("add a reprompt if you want to keep the session open for the user to respond")
+            .response
         )
 
 
@@ -165,6 +208,7 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
     stating the request handler chain is not found, you have not implemented a handler for
     the intent being invoked or included it in the skill builder below.
     """
+
     def can_handle(self, handler_input, exception):
         # type: (HandlerInput, Exception) -> bool
         return True
@@ -177,10 +221,11 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
 
         return (
             handler_input.response_builder
-                .speak(speak_output)
-                .ask(speak_output)
-                .response
+            .speak(speak_output)
+            .ask(speak_output)
+            .response
         )
+
 
 # The SkillBuilder object acts as the entry point for your skill, routing all request and response
 # payloads to the handlers above. Make sure any new handlers or interceptors you've
@@ -195,7 +240,8 @@ sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
-sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
+sb.add_request_handler(
+    IntentReflectorHandler())  # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 
 sb.add_exception_handler(CatchAllExceptionHandler())
 
